@@ -225,11 +225,41 @@ function App() {
             <CardContent className="space-y-4">
               <div className="info-banner" data-testid="mic-info-banner">
                 <Info className="info-icon" />
-                <p className="info-text">
-                  <strong>Microphone Access:</strong> Click "Allow" when prompted for microphone permissions. 
-                  If blocked, check your browser settings or use Upload Audio instead.
-                </p>
+                <div className="info-content">
+                  <p className="info-text">
+                    <strong>Microphone Access:</strong> Click "Test Microphone" first to grant permissions. 
+                    If blocked, click the camera/mic icon in your browser address bar.
+                  </p>
+                  {micStatus === 'granted' && (
+                    <Badge className="status-badge success" data-testid="mic-status-granted">
+                      ✓ Microphone Ready
+                    </Badge>
+                  )}
+                  {micStatus === 'denied' && (
+                    <Badge className="status-badge error" data-testid="mic-status-denied">
+                      ✗ Access Denied
+                    </Badge>
+                  )}
+                  {micStatus === 'not-found' && (
+                    <Badge className="status-badge warning" data-testid="mic-status-not-found">
+                      ⚠ No Microphone Found
+                    </Badge>
+                  )}
+                </div>
               </div>
+              <div className="button-group">
+                <Button
+                  data-testid="test-microphone-button"
+                  onClick={checkMicrophone}
+                  variant="outline"
+                  className="test-mic-btn"
+                  disabled={loading}
+                >
+                  <Mic className="btn-icon" />
+                  Test Microphone
+                </Button>
+              </div>
+              <Separator className="my-2" />
               <div className="button-group">
                 <Button
                   data-testid="record-button"

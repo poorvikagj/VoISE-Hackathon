@@ -33,6 +33,7 @@ function App() {
   const [customAction, setCustomAction] = useState('');
   const [loading, setLoading] = useState(false);
   const [clinicalData, setClinicalData] = useState(null);
+  const [micStatus, setMicStatus] = useState('unknown');
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);

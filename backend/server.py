@@ -1,38 +1,50 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+# backend/server.py
 import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
-import uuid
-from datetime import datetime, timezone
-from emergentintegrations.llm.openai import OpenAISpeechToText
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
 import tempfile
+import logging
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import List
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from motor.motor_asyncio import AsyncIOMotorClient
+from starlette.middleware.cors import CORSMiddleware
+
+# Groq async client
+from groq import AsyncGroq
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
+
+# Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get("MONGO_URL")
+if not mongo_url:
+    raise RuntimeError("MONGO_URL not set in .env")
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get("DB_NAME", "test_db")]
 
-# Create the main app without a prefix
+# Groq client (async)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY not set in .env")
+groq_client = AsyncGroq(api_key=GROQ_API_KEY)
+
+# FastAPI app and router
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Initialize AI services
-emergent_key = os.environ.get('EMERGENT_LLM_KEY')
-stt = OpenAISpeechToText(api_key=emergent_key)
-
-# System prompt for clinical notes
+# System prompt (kept from your original)
 CLINICAL_SYSTEM_PROMPT = """You are ClinicalNoteGPT, a medical AI that converts doctor–patient conversations and non-verbal observations into structured clinical documentation.
 
 Input to you will include:
@@ -77,7 +89,7 @@ You MUST respond with ONLY valid JSON in this exact format:
   "clinical_summary": ""
 }"""
 
-# Models
+# Pydantic models
 class ICD10Code(BaseModel):
     condition: str
     code: str
@@ -107,9 +119,7 @@ class TranscriptionResponse(BaseModel):
     transcript: str
 
 class ClinicalNote(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
     transcript: str
     observed_actions: str
     clinical_output: dict
@@ -118,50 +128,61 @@ class ClinicalNote(BaseModel):
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pre-Charting AI Assistant API"}
+    return {"message": "Pre-Charting AI Assistant API (Groq)"}
 
 @api_router.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(file: UploadFile = File(...)):
-    """Transcribe audio file using Whisper API"""
+    """
+    Transcribe an uploaded audio file using Groq speech-to-text.
+    Saves the uploaded file temporarily, sends to Groq, and returns text.
+    """
     try:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
+        suffix = Path(file.filename).suffix or ".wav"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             content = await file.read()
-            temp_file.write(content)
-            temp_path = temp_file.name
-        
-        # Transcribe using Whisper
-        with open(temp_path, "rb") as audio_file:
-            response = await stt.transcribe(
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Open the file and call Groq transcription API (async)
+        with open(tmp_path, "rb") as audio_file:
+            transcription = await groq_client.audio.transcriptions.create(
                 file=audio_file,
-                model="whisper-1",
+                model=os.environ.get("GROQ_TRANSCRIBE_MODEL", "whisper-large-v3-turbo"),
                 response_format="json",
-                language="en"
+                language="en",
+                temperature=0.0,
             )
-        
-        # Clean up temp file
-        os.unlink(temp_path)
-        
-        return TranscriptionResponse(transcript=response.text)
-    
+
+        # transcription.text is provided by Groq client (see docs)
+        text = getattr(transcription, "text", None) or (transcription.get("text") if isinstance(transcription, dict) else None)
+        if text is None:
+            # Try fallback: if verbose json or different structure
+            text = json.dumps(transcription, default=str)
+
+        # cleanup
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+        return TranscriptionResponse(transcript=text)
+
     except Exception as e:
-        logging.error(f"Transcription error: {str(e)}")
+        logger.exception("Transcription error")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 @api_router.post("/generate-notes", response_model=ClinicalOutput)
 async def generate_clinical_notes(request: TranscriptionRequest):
-    """Generate clinical SOAP notes from transcript and observed actions"""
+    """
+    Generate clinical notes using Groq chat completions.
+    """
     try:
-        # Initialize LLM chat
-        chat = LlmChat(
-            api_key=emergent_key,
-            session_id=str(uuid.uuid4()),
-            system_message=CLINICAL_SYSTEM_PROMPT
-        ).with_model("openai", "gpt-5.1")
-        
-        # Create user message
-        user_message = UserMessage(
-            text=f"""Please analyze the following doctor-patient interaction and generate structured clinical notes.
+        # Build messages (system + user)
+        messages = [
+            {"role": "system", "content": CLINICAL_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"""Please analyze the following doctor-patient interaction and generate structured clinical notes in strict JSON format.
 
 Transcript:
 {request.transcript}
@@ -169,73 +190,100 @@ Transcript:
 Observed Non-Verbal Actions:
 {request.observed_actions}
 
-Generate the clinical documentation in JSON format."""
+Return ONLY valid JSON that matches this schema:
+{{
+  "subjective": "",
+  "objective": "",
+  "assessment": "",
+  "plan": "",
+  "icd10_codes": [{{"condition": "","code": ""}}],
+  "medication_interactions": [{{"drug_a":"","drug_b":"","severity":"","note":""}}],
+  "red_flags": [],
+  "non_verbal_signs": [],
+  "clinical_summary": ""
+}}
+"""
+            }
+        ]
+
+        # call Groq async chat completion
+        chat_resp = await groq_client.chat.completions.create(
+            messages=messages,
+            model=os.environ.get("GROQ_CHAT_MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.0,
+            max_completion_tokens=1500,
+            stream=False,
         )
-        
-        # Get LLM response
-        response = await chat.send_message(user_message)
-        
-        # Parse JSON response
-        # Try to extract JSON from response if it's wrapped in markdown
-        response_text = response.strip()
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.startswith("```"):
-            response_text = response_text[3:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
-        
-        clinical_data = json.loads(response_text)
-        
-        # Save to database
+
+        # Extract content from response. Groq returns choices[0].message.content per docs
+        choice = chat_resp.choices[0]
+        # Support both message.content or .message.content nested structures
+        content = None
+        if hasattr(choice, "message") and getattr(choice.message, "content", None) is not None:
+            content = choice.message.content
+        elif isinstance(choice, dict):
+            content = choice.get("message", {}).get("content") or choice.get("text")
+        # final fallback
+        if content is None:
+            content = str(chat_resp)
+
+        # Strip possible markdown fences
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        # Parse JSON
+        clinical_data = json.loads(content)
+
+        # Validate by constructing ClinicalOutput (will raise if schema mismatch)
+        validated = ClinicalOutput(**clinical_data)
+
+        # Save to DB
         note = ClinicalNote(
             transcript=request.transcript,
             observed_actions=request.observed_actions,
-            clinical_output=clinical_data
+            clinical_output=clinical_data,
         )
-        
         doc = note.model_dump()
-        doc['timestamp'] = doc['timestamp'].isoformat()
+        doc["timestamp"] = doc["timestamp"].isoformat()
         await db.clinical_notes.insert_one(doc)
-        
-        return ClinicalOutput(**clinical_data)
-    
+
+        return validated
+
     except json.JSONDecodeError as e:
-        logging.error(f"JSON parsing error: {str(e)}. Response was: {response}")
+        logger.exception("Failed to parse JSON from model response")
         raise HTTPException(status_code=500, detail=f"Failed to parse LLM response: {str(e)}")
     except Exception as e:
-        logging.error(f"Clinical notes generation error: {str(e)}")
+        logger.exception("Clinical notes generation error")
         raise HTTPException(status_code=500, detail=f"Clinical notes generation failed: {str(e)}")
 
 @api_router.get("/notes", response_model=List[ClinicalNote])
 async def get_clinical_notes():
-    """Retrieve all clinical notes"""
     notes = await db.clinical_notes.find({}, {"_id": 0}).to_list(1000)
-    
-    for note in notes:
-        if isinstance(note['timestamp'], str):
-            note['timestamp'] = datetime.fromisoformat(note['timestamp'])
-    
+    # convert timestamps back to datetime where needed
+    for n in notes:
+        if isinstance(n.get("timestamp"), str):
+            try:
+                n["timestamp"] = datetime.fromisoformat(n["timestamp"])
+            except Exception:
+                pass
     return notes
 
-# Include the router in the main app
+# include router & middleware
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

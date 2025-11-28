@@ -189,6 +189,13 @@ function App() {
               <CardTitle className="card-title">Audio Input</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="info-banner" data-testid="mic-info-banner">
+                <Info className="info-icon" />
+                <p className="info-text">
+                  <strong>Microphone Access:</strong> Click "Allow" when prompted for microphone permissions. 
+                  If blocked, check your browser settings or use Upload Audio instead.
+                </p>
+              </div>
               <div className="button-group">
                 <Button
                   data-testid="record-button"

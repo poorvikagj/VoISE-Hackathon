@@ -39,6 +39,38 @@ function App() {
   const audioChunksRef = useRef([]);
   const fileInputRef = useRef(null);
 
+  const checkMicrophone = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setMicStatus('not-supported');
+        toast.error('Your browser does not support microphone access');
+        return;
+      }
+
+      // Try to get permission
+      toast.info('Requesting microphone access... Please click "Allow" when prompted.');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Success - stop the stream immediately
+      stream.getTracks().forEach(track => track.stop());
+      setMicStatus('granted');
+      toast.success('Microphone access granted! You can now record audio.');
+    } catch (error) {
+      console.error('Microphone check error:', error);
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        setMicStatus('denied');
+        toast.error('Microphone access denied. Please click the camera/mic icon in your browser address bar and allow microphone access.');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        setMicStatus('not-found');
+        toast.error('No microphone detected. Please connect a microphone or use Upload Audio instead.');
+      } else {
+        setMicStatus('error');
+        toast.error('Could not access microphone: ' + error.message);
+      }
+    }
+  };
+
   const startRecording = async () => {
     try {
       // Check if mediaDevices is supported
@@ -48,6 +80,7 @@ function App() {
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicStatus('granted');
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];

@@ -236,9 +236,21 @@ function App() {
                     </Badge>
                   )}
                   {micStatus === 'denied' && (
-                    <Badge className="status-badge error" data-testid="mic-status-denied">
-                      ✗ Access Denied
-                    </Badge>
+                    <div className="space-y-2">
+                      <Badge className="status-badge error" data-testid="mic-status-denied">
+                        ✗ Access Denied
+                      </Badge>
+                      <div className="troubleshoot-box">
+                        <strong>To fix this:</strong>
+                        <ol className="troubleshoot-steps">
+                          <li>Look for the <strong>🔒 lock icon</strong> or <strong>🎤 microphone icon</strong> in your browser's address bar (next to the URL)</li>
+                          <li>Click on it</li>
+                          <li>Find "Microphone" and change it from "Block" to <strong>"Allow"</strong></li>
+                          <li>Refresh this page or click "Test Microphone" again</li>
+                        </ol>
+                        <p className="troubleshoot-note">📍 The icon is usually on the left side of the address bar where it shows "https://"</p>
+                      </div>
+                    </div>
                   )}
                   {micStatus === 'not-found' && (
                     <Badge className="status-badge warning" data-testid="mic-status-not-found">

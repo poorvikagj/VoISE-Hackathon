@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Mic, Upload, FileAudio, Loader2, Plus, X, AlertCircle } from 'lucide-react';
+import { Mic, Upload, FileAudio, Loader2, Plus, X, AlertCircle, Info } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;

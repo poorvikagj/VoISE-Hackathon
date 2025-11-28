@@ -270,6 +270,20 @@ function App() {
                   <Mic className="btn-icon" />
                   Test Microphone
                 </Button>
+                {micStatus === 'denied' && (
+                  <Button
+                    data-testid="reset-permissions-button"
+                    onClick={() => {
+                      setMicStatus('unknown');
+                      toast.info('Click the lock/microphone icon in the address bar, then allow microphone access, then test again.');
+                    }}
+                    variant="outline"
+                    className="reset-btn"
+                  >
+                    <RefreshCw className="btn-icon" />
+                    Try Again
+                  </Button>
+                )}
               </div>
               <Separator className="my-2" />
               <div className="button-group">

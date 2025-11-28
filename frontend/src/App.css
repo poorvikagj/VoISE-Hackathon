@@ -94,6 +94,36 @@ body {
   color: #0c4a6e;
 }
 
+.info-banner {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  padding: 0.875rem;
+  display: flex;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.info-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #1d4ed8;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.info-text {
+  color: #1e40af;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.info-text strong {
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
 .button-group {
   display: flex;
   gap: 0.75rem;

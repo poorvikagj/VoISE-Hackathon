@@ -40,6 +40,12 @@ function App() {
 
   const startRecording = async () => {
     try {
+      // Check if mediaDevices is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('Your browser does not support audio recording. Please use a modern browser like Chrome, Firefox, or Edge.');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -59,8 +65,17 @@ function App() {
       setIsRecording(true);
       toast.success('Recording started');
     } catch (error) {
-      toast.error('Failed to access microphone');
       console.error('Recording error:', error);
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        toast.error('Microphone access denied. Please allow microphone permissions in your browser settings and try again.');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        toast.error('No microphone found. Please connect a microphone or use the Upload Audio option instead.');
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        toast.error('Microphone is being used by another application. Please close other apps and try again.');
+      } else {
+        toast.error('Failed to access microphone. Try uploading an audio file instead.');
+      }
     }
   };
 

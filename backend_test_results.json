@@ -1,0 +1,52 @@
+{
+  "summary": {
+    "total_tests": 7,
+    "passed_tests": 6,
+    "success_rate": 85.71428571428571,
+    "timestamp": "2025-11-28T06:27:07.848261"
+  },
+  "test_results": [
+    {
+      "test": "API Root Endpoint",
+      "success": true,
+      "details": "Status: 200, Message: Pre-Charting AI Assistant API",
+      "timestamp": "2025-11-28T06:26:31.598214"
+    },
+    {
+      "test": "Transcribe Endpoint - No File",
+      "success": true,
+      "details": "Status: 422 (Expected 422 for missing file)",
+      "timestamp": "2025-11-28T06:26:31.636950"
+    },
+    {
+      "test": "Transcribe Endpoint - With File",
+      "success": true,
+      "details": "Status: 500 (Expected for dummy audio file)",
+      "timestamp": "2025-11-28T06:26:47.718135"
+    },
+    {
+      "test": "Generate Notes - No Data",
+      "success": true,
+      "details": "Status: 422 (Expected 422 for missing data)",
+      "timestamp": "2025-11-28T06:26:47.770298"
+    },
+    {
+      "test": "Generate Notes - With Data",
+      "success": true,
+      "details": "Status: 200, All required fields present",
+      "timestamp": "2025-11-28T06:27:07.686305"
+    },
+    {
+      "test": "Get Notes Endpoint",
+      "success": true,
+      "details": "Status: 200, Notes count: 1",
+      "timestamp": "2025-11-28T06:27:07.806382"
+    },
+    {
+      "test": "CORS Headers",
+      "success": false,
+      "details": "Status: 405, CORS headers present: 0/2",
+      "timestamp": "2025-11-28T06:27:07.847337"
+    }
+  ]
+}
